@@ -28,41 +28,7 @@ window.onload = function() {
      }
   });
 
-var uuid = 'A55D25C2-DA5F-40B2-B8D9-B940BF39795C';
-var registeredDevice = "74:45:8A:A0:AC:47";
-var socketId = -1;
-var sendResp;
-
-chrome.runtime.onMessageExternal.addListener(
-  function(request, sender, sendResponse) {
-    console.log("request : " + request);
-    if (request.type == "code"){
-       //sendResponse({"code":"dummy_code"});
-       sendResp = sendResponse;
-       chrome.bluetoothSocket.create(function(createInfo) {
-          chrome.bluetoothSocket.connect(createInfo.socketId,
-          registeredDevice, uuid, onConnectedCallback);
-          socketId = createInfo.socketId;
-        });
-    }
-});
-
-console.log("Registered Event Listener for Messages");
-
-  function ab2str(buf) {
-     return String.fromCharCode.apply(null, new Uint8Array(buf));
-  }
-
-  function str2ab(str) {
-     var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
-     var bufView = new Uint16Array(buf);
-     for (var i=0, strLen=str.length; i < strLen; i++) {
-       bufView[i] = str.charCodeAt(i);
-     }
-     return buf;
-  }
-
-  var onConnectedCallback = function() {
+/* var onConnectedCallback = function() {
 
     if (chrome.runtime.lastError) {
       console.log("Connection failed: " + chrome.runtime.lastError.message);
@@ -84,17 +50,130 @@ console.log("Registered Event Listener for Messages");
           return;
         var code = ab2str(receiveInfo.data);
         console.log("Data received: " + code);
-        sendResp({"code":code});
-      });
-
-      //register receiver error listener for error handling/logging
-      chrome.bluetoothSocket.onReceiveError.addListener(function(errorInfo) {
-        // Cause is in errorInfo.error.
-        console.log(errorInfo.errorMessage);
-        sendResp({"code":null,"error":errorInfo.errorMessage});
+        portx.postMessage({"code":code});
       });
     }
   };
+
+var uuid = 'A55D25C2-DA5F-40B2-B8D9-B940BF39795C';
+var registeredDevice = "74:45:8A:A0:AC:47";
+var socketId = -1;
+  chrome.bluetoothSocket.create(function(createInfo) {
+          chrome.bluetoothSocket.connect(createInfo.socketId,
+                registeredDevice, uuid, onConnectedCallback);
+          socketId = createInfo.socketId;
+          console.log(createInfo.socketId);
+        });
+
+}*/
+
+
+var uuid = 'A55D25C2-DA5F-40B2-B8D9-B940BF39795C';
+var registeredDevice = "74:45:8A:A0:AC:47";
+var socketId = -1;
+var portx;
+
+function ab2str(buf)
+{
+   return String.fromCharCode.apply(null, new Uint8Array(buf));
+}
+
+function str2ab(str)
+{
+     var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+     var bufView = new Uint16Array(buf);
+     for (var i=0, strLen=str.length; i < strLen; i++) {
+       bufView[i] = str.charCodeAt(i);
+     }
+     return buf;
+}
+
+ var onConnectedCallback = function() {
+
+    if (chrome.runtime.lastError) {
+      console.log("Connection failed: " + chrome.runtime.lastError.message);
+    } else {
+      console.log("Socket created: " + socketId);
+
+      //register send handler primarily for logging
+      chrome.bluetoothSocket.send(socketId,str2ab(''),function(bytes_sent) {
+         if (chrome.runtime.lastError) {
+            console.log("Send failed: " + chrome.runtime.lastError.message);
+         } else {
+            console.log("Sent " + bytes_sent + " bytes")
+         }
+      });
+
+      //register add listener primarily for receiving
+      chrome.bluetoothSocket.onReceive.addListener(function(receiveInfo) {
+        if (receiveInfo.socketId != socketId)
+          return;
+        var code = ab2str(receiveInfo.data);
+        console.log("Data received: " + code);
+        portx.postMessage({"code":code});
+        chrome.bluetoothSocket.close(receiveInfo.socketId);
+      });
+    }
+};
+
+
+
+
+// For long-lived connections:
+chrome.runtime.onConnectExternal.addListener(function(port) {
+  portx= port;
+  port.onMessage.addListener(function(msg) {
+    console.log("Received message from content_script");
+
+    //registering the error receiver
+    chrome.bluetoothSocket.onReceiveError.addListener(function(errorInfo) {
+        // Cause is in errorInfo.error.
+        console.log(errorInfo.errorMessage);
+        portx.postMessage({"code":null,"error":errorInfo.errorMessage});
+        return true;
+      });
+
+    //create connection and connect
+    chrome.bluetoothSocket.create(function(createInfo) {
+          console.log(createInfo.socketId);
+          chrome.bluetoothSocket.connect(createInfo.socketId,
+          registeredDevice, uuid, onConnectedCallback);
+          socketId = createInfo.socketId;
+        });
+    return true;
+  });
+  return true;
+});
+
+
+
+/*chrome.runtime.onMessageExternal.addListener(
+  function(request, sender, sendResponse) {
+    console.log("request : " + request);
+    if (request.type == "code"){
+       //sendResponse({"code":"dummy_code"});
+       //register receiver error listener for error handling/logging
+      chrome.bluetoothSocket.onReceiveError.addListener(function(errorInfo) {
+        // Cause is in errorInfo.error.
+        console.log(errorInfo.errorMessage);
+        portx.postMessage({"code":null,"error":errorInfo.errorMessage});
+        chrome.bluetooth.setPause(socketId,false);
+
+      });
+       chrome.bluetoothSocket.create(function(createInfo) {
+          chrome.bluetoothSocket.connect(createInfo.socketId,
+          registeredDevice, uuid, onConnectedCallback);
+          socketId = createInfo.socketId;
+        });
+    }
+});
+*/
+
+console.log("Registered Event Listener for Messages");
+
+
+
+
 
 
   console.log("Registered Event Handler for an external event");
